@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { IClickhouseModuleOptions, IClickhouseOptionsFactory } from '../adapters/clickhouse';
 import { IClickhouseConnectionOptions, IClickhouseSettings } from '../adapters/clickhouse/client';
 import { ICacheOptions } from '../adapters/clickhouse/cache/cache.interfaces';
@@ -20,18 +20,19 @@ export class ClickhouseConfig implements IClickhouseOptionsFactory {
 		};
 
 		this._settings = {
-			enableDebug: true,
 			defaultFormat: 'JSON',
 		};
 
 		this._cache = {
 			chunkLifeMs: 1000,
-			chunkSize: 5,
+			chunkSize: 100,
 			checkIntervalMs: 5000,
 			dataWatcher: 'disk',
 			disk: {
 				outputDirectory: 'ch_cache',
 			},
+			enableDebug: true,
+			logger: new Logger('ClickhouseModule'),
 		};
 	}
 

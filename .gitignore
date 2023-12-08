@@ -2,7 +2,8 @@
 /dist
 /.idea
 
-./clickhouse/data/*
+./clickhouse/data
+./rabbitmq/data
 ./ch_cache/*
 
 .env

@@ -19,6 +19,9 @@ FROM node:18.16.0-alpine3.17 as dev
 LABEL stage=dev
 ENV NODE_ENV development
 
+WORKDIR /srv/app
+RUN mkdir -p /srv/app/ch_cache
+
 COPY . .
 
 RUN yarn global add @nestjs/cli
@@ -46,13 +49,12 @@ LABEL stage=execute
 ENV NODE_ENV production
 
 WORKDIR /srv/app
+RUN mkdir -p /srv/app/ch_cache
 
 RUN apk update && apk upgrade && apk add --no-cache bash curl
 
-COPY --from=build /srv/build/start.sh ./start.sh
 COPY --from=build /srv/build/node_modules ./node_modules
 COPY --from=build /srv/build/dist ./dist
-COPY --from=build /srv/build/.env.local ./.env.local
 
 EXPOSE 8080
 

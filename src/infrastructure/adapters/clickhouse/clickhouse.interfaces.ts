@@ -2,6 +2,16 @@ import { ModuleMetadata, Type } from '@nestjs/common';
 import { IClickhouseConnectionOptions, IClickhouseSettings } from './client';
 import { ICacheOptions } from './cache/cache.interfaces';
 
+export interface IClickhouseLogger {
+	log(...args: unknown[]): unknown;
+
+	debug(...args: unknown[]): unknown;
+
+	warn(...args: unknown[]): unknown;
+
+	error(...args: unknown[]): unknown;
+}
+
 export interface IClickhouseModuleOptions {
 	connection: IClickhouseConnectionOptions;
 	settings: IClickhouseSettings;

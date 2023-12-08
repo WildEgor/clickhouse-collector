@@ -8,7 +8,6 @@ export interface IClickhouseConnectionOptions {
 }
 
 export interface IClickhouseSettings {
-	enableDebug?: boolean;
 	settings?: Record<string, unknown>;
 	defaultFormat: 'JSON' | 'CSV' | 'TSV' | string;
 }

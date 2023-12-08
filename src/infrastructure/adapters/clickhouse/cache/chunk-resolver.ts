@@ -23,6 +23,8 @@ export class ChunkResolver {
 	private _watchingToResolveQueueEnabled: boolean;
 	private _watchingEnabled: boolean;
 	private _commandStop: boolean;
+	private readonly _isLogging: boolean;
+	private readonly _debugMode: boolean;
 
 	/**
 	 * Create ChunkResolver instance
@@ -64,10 +66,21 @@ export class ChunkResolver {
 				break;
 		}
 		/**
+		 * Enable debug mode if it is defined
+		 */
+		this._debugMode = !!this._options?.enableDebug;
+		/**
+		 * Enable logging if logger is defined
+		 */
+		this._isLogging = !!this._options?.logger;
+		/**
 		 * On init we have to restore already existing data from watcher
 		 * and start pending
 		 */
 		this._dataWatcher.restore().then(async () => {
+			if (this._isLogging) {
+				this._options.logger?.log(`Restore data from watcher`);
+			}
 			await this._startWatching();
 		});
 		/**
@@ -91,6 +104,11 @@ export class ChunkResolver {
 	 */
 	public async cache(tableName: string, rows: InsertRow[]): Promise<void> {
 		const chunkedRowsList = Utils.chunkList(rows, this._options.chunkSize);
+
+		if (this._isLogging && this._debugMode) {
+			this._options.logger?.debug(`Cache ${tableName} rows ${rows.length}`);
+			this._options.logger?.debug(JSON.stringify(rows));
+		}
 
 		for (const chunkedRows of chunkedRowsList) {
 			while (chunkedRows.length) {
@@ -135,7 +153,11 @@ export class ChunkResolver {
 		const handleSignal = (signal: NodeJS.Signals): void => {
 			// eslint-disable-next-line @typescript-eslint/no-unused-vars
 			const signalHandler: NodeJS.BeforeExitListener = (code: number) => {
-				console.log(`Initialize chunks backup due to received ${signal} signal ${code}`);
+				if (this._isLogging) {
+					this._options.logger?.warn(
+						`Initialize chunks backup due to received ${signal} signal ${code}`,
+					);
+				}
 				// set pending off
 				this._commandStop = true;
 				// Synchronously backup runtime data
@@ -154,6 +176,10 @@ export class ChunkResolver {
 	 * Service method to start pending
 	 */
 	private async _startWatching(): Promise<void> {
+		if (this._isLogging && this._debugMode) {
+			this._options.logger?.debug(`Start watching`);
+		}
+
 		await this._startWatchingRegistry();
 		await this._startWatchingToResolveQueue();
 	}
@@ -162,6 +188,10 @@ export class ChunkResolver {
 	 * A method to start a loop to check there are chunks in our registry
 	 */
 	private async _startWatchingRegistry(): Promise<void> {
+		if (this._isLogging && this._debugMode) {
+			this._options.logger?.debug(`Start watching registry`);
+		}
+
 		if (!this._watchingEnabled) {
 			this._watchingEnabled = true;
 			await this._watchRegistry();
@@ -198,6 +228,10 @@ export class ChunkResolver {
 
 				// Add chunk to queue
 				if (canResolve) {
+					if (this._isLogging && this._debugMode) {
+						this._options.logger?.debug(`Restore data from watcher`);
+					}
+
 					this._registry.unregister(state.ref.id);
 					this._toResolveQueue.enqueue(state.ref);
 					this._startWatchingToResolveQueue().then().catch();
@@ -215,6 +249,10 @@ export class ChunkResolver {
 	 * A method to start a loop to pass chunks outside and resolve
 	 */
 	private async _startWatchingToResolveQueue(): Promise<void> {
+		if (this._isLogging && this._debugMode) {
+			this._options.logger?.debug(`Start watching resolve queue`);
+		}
+
 		if (!this._watchingToResolveQueueEnabled) {
 			this._watchingToResolveQueueEnabled = true;
 			await this._watchToResolveQueue();
@@ -252,6 +290,12 @@ export class ChunkResolver {
 
 			while (!chunk.isConsistent()) {
 				continue;
+			}
+
+			if (this._isLogging && this._debugMode) {
+				this._options.logger?.debug(
+					`Resolve chunk id ${chunk.id} for table ${chunk.table}`,
+				);
 			}
 
 			/**

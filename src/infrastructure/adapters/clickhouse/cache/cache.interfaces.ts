@@ -1,3 +1,5 @@
+import { IClickhouseLogger } from '../clickhouse.interfaces';
+
 export type ChunkId = string;
 export type Table = string;
 export type InsertRow = Record<string, unknown>;
@@ -10,4 +12,6 @@ export interface ICacheOptions {
 	disk?: {
 		outputDirectory: string;
 	};
+	enableDebug?: boolean;
+	logger?: IClickhouseLogger;
 }

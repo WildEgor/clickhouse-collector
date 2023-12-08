@@ -2,9 +2,6 @@ version: '3.8'
 
 volumes:
   clickhouse_data:
-    name: clickhouse_data
-  rabbitmq_data:
-    name: rabbitmq_data
 
 services:
   rabbitmq:
@@ -15,8 +12,19 @@ services:
     ports:
       - "5672:5672"
       - "15672:15672"
+      # environment:
+      # CONFIG_FILE: /etc/rabbitmq/main/rabbitmq.conf
+      # RABBITMQ_DEFAULT_PASS: guest
+      # RABBITMQ_DEFAULT_USER: guest
     volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
+      - ./rabbitmq/conf:/etc/rabbitmq/
+      - ./rabbitmq/data:/var/lib/rabbitmq
+    healthcheck:
+      test:
+        [ "CMD", "echo", "Awaiting rabbitmq..." ]
+      interval: 10s
+      timeout: 10s
+      retries: 8
 
   clickhouse:
     image: clickhouse/clickhouse-server
@@ -40,8 +48,9 @@ services:
       dockerfile: Dockerfile
       target: dev
     env_file:
-      - .env
+      - .env.development
     ports:
       - "8080:8080"
     depends_on:
+      - rabbitmq
       - clickhouse

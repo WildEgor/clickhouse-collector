@@ -31,11 +31,10 @@ export class AnalyticsRepository implements IAnalyticsRepository, OnApplicationB
 		// eslint-disable-next-line consistent-return
 		this.resolver.onResolved(async (chunkLoader) => {
 			const jsonRows = await chunkLoader.loadRows();
-
 			try {
-				this._logger.debug(
-					`Inserting ${jsonRows.length} rows into ${chunkLoader.chunk.table}`,
-				);
+				// this._logger.debug(
+				// 	`Inserting ${jsonRows.length} rows into ${chunkLoader.chunk.table}`,
+				// );
 				await this.client.insert(chunkLoader.chunk.table, jsonRows as TJSONFormatRow[]);
 			} catch (e) {
 				this._logger.error(`Error inserting rows into ${chunkLoader.chunk.table}`, e);

@@ -40,14 +40,18 @@ export class ClickhouseClient {
 			return 0;
 		}
 		const jsonInsertFormat = ClickhouseFormatUtils.jsonRowsToInsertFormat(rows);
+
 		const sql = `INSERT INTO ${table} (${jsonInsertFormat.keys.join(',')})
                      VALUES`;
+
 		const data = ClickhouseFormatUtils.jsonInsertFormatToSqlValues(jsonInsertFormat);
+
 		await this._httpClient.request({
 			params: { query: sql },
 			data,
 			queryOptions: options,
 		});
+
 		return rows.length;
 	}
 
@@ -65,9 +69,13 @@ export class ClickhouseClient {
 		options: IClickhouseQueryOptions = {},
 	): Promise<IClickhouseHttpClientResponse<T>> {
 		const { noFormat = false, format = this._opts.defaultFormat } = options;
+
 		const queryFormatCondition = noFormat ? '' : `FORMAT ${format}`;
+
 		const sql = `${query} ${queryFormatCondition}`.trim();
+
 		const response = await this._httpClient.request<T>({ data: sql });
+
 		return response;
 	}
 }

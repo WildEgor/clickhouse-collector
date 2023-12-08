@@ -3,5 +3,6 @@
 dist
 docker-compose.yml
 clickhouse
+rabbitmq
 .env
 ch_cache
