@@ -44,3 +44,6 @@ dist
 # local env files
 .env
 .env.local
+
+#
+/database
