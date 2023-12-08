@@ -1,0 +1,17 @@
+import { ModuleMetadata, Type } from '@nestjs/common';
+import { IClickhouseConnectionOptions, IClickhouseSettings } from './client';
+import { ICacheOptions } from './cache/cache.interfaces';
+
+export interface IClickhouseModuleOptions {
+	connection: IClickhouseConnectionOptions;
+	settings: IClickhouseSettings;
+	cache: ICacheOptions;
+}
+
+export interface IClickhouseOptionsFactory {
+	createClickhouseOptions(): Promise<IClickhouseModuleOptions> | IClickhouseModuleOptions;
+}
+
+export interface IClickhouseAsyncOptions extends Pick<ModuleMetadata, 'imports'> {
+	useExisting: Type<IClickhouseOptionsFactory>;
+}

@@ -1,6 +1,8 @@
 import { Global, Module } from '@nestjs/common';
 import { ConfiguratorModule } from '../../shared/modules/configurator/configurator.module';
 import { AppConfig } from './app.config';
+import { ClickhouseConfig } from './clickhouse.config';
+import { ConsumerConfig } from './consumer.config';
 
 @Global()
 @Module({
@@ -11,7 +13,7 @@ import { AppConfig } from './app.config';
 			cache: true,
 		}),
 	],
-	providers: [AppConfig],
-	exports: [AppConfig],
+	providers: [AppConfig, ClickhouseConfig, ConsumerConfig],
+	exports: [AppConfig, ClickhouseConfig, ConsumerConfig],
 })
 export class ConfigsModule {}
