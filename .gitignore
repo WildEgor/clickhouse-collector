@@ -3,5 +3,6 @@
 /.idea
 
 ./clickhouse/data/*
+./ch_cache/*
 
 .env
