@@ -1,6 +1,6 @@
 CREATE TABLE collector.taxi_trips
 (
-    trip_id          UInt32,
+    trip_id          VARCHAR,
     pickup_datetime  DateTime,
     dropoff_datetime DateTime,
     pickup_longitude Nullable(Float64),
