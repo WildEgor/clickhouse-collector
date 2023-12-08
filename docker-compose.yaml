@@ -1,0 +1,34 @@
+version: '3.8'
+
+volumes:
+  clickhouse_data:
+    name: clickhouse_data
+
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server
+    container_name: 'clickhouse'
+    hostname: 'clickhouse'
+    restart: unless-stopped
+    volumes:
+      - ./clickhouse/configs:/etc/clickhouse-server/config.d/config.xml
+      - ./clickhouse/configs:/etc/clickhouse-server/users.d/users.xml
+      - clickhouse_data:/var/lib/clickhouse/
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+
+  collector:
+    hostname: collector
+    container_name: 'collector'
+    restart: always
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dev
+    env_file:
+      - .env
+    ports:
+      - "8080:8080"
+    depends_on:
+      - clickhouse
