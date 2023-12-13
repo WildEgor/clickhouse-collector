@@ -1,50 +1,32 @@
-import fs from 'fs';
+import * as fsSync from 'fs';
+import fs from 'fs/promises';
 import path from 'path';
-import { promisify } from 'util';
 import { v4 as uuidv4 } from 'uuid';
-import { E_CODES } from '../cache.constants';
 import { ChunkId } from '../cache.interfaces';
 import { ChunkRegistry } from '../chunk-registry';
 import { Chunk } from '../chunk/chunk';
 import { IChunkMetadata } from '../chunk/chunk.interfaces';
-import { Row } from '../row/row';
 import { DataWatcher } from './abstract';
-import { IDiskLoad, IFsWatcherOptions, ISave, TOperationId } from './watchers.interfaces';
-
-const fsExistsAsync = promisify(fs.exists);
-const fsMkdirAsync = promisify(fs.mkdir);
-const fsReadFileAsync = promisify(fs.readFile);
-const fsWriteFileAsync = promisify(fs.writeFile);
-const fsAppendFileAsync = promisify(fs.appendFile);
-const fsUnlinkAsync = promisify(fs.unlink);
-const fsReaddirAsync = promisify(fs.readdir);
+import { IDiskLoad, IFsWatcherOptions, ISave, TChunkCache } from './watchers.interfaces';
 
 export class DiskWatcher extends DataWatcher<ISave, IDiskLoad, IFsWatcherOptions> {
 	readonly _registry: ChunkRegistry;
 	readonly _options: IFsWatcherOptions;
-	readonly _chunks: Record<
-		ChunkId,
-		{
-			ref: Chunk;
-			operations: Record<TOperationId, Row[]>;
-		}
-	>;
+	readonly _chunks: Map<ChunkId, TChunkCache>;
 
 	constructor(registry: ChunkRegistry, options: IFsWatcherOptions) {
 		super(options);
-
 		this._registry = registry;
 		this._options = options;
-
 		/**
 		 * Runtime cache storage
 		 */
-		this._chunks = {};
+		this._chunks = new Map<ChunkId, TChunkCache>();
 	}
 
 	public async save(op: ISave): Promise<void> {
 		if (!op.insertRows.length) {
-			throw new Error(E_CODES.E_EMPTY_SAVE);
+			return;
 		}
 
 		if (!this.isWriteable()) {
@@ -54,31 +36,37 @@ export class DiskWatcher extends DataWatcher<ISave, IDiskLoad, IFsWatcherOptions
 		const operationId = uuidv4();
 
 		op.chunkRef.setConsistency(false);
-		if (!this._chunks[op.chunkRef.id]) {
-			this._chunks[op.chunkRef.id] = {
+
+		const cachedChunk = this._chunks.get(op.chunkRef.id);
+		if (!cachedChunk) {
+			this._chunks.set(op.chunkRef.id, {
 				ref: op.chunkRef,
 				operations: {},
-			};
+			});
 		}
-		this._chunks[op.chunkRef.id].operations[operationId] = op.insertRows;
+		if (cachedChunk) {
+			cachedChunk.operations[operationId] = op.insertRows;
+			this._chunks.set(op.chunkRef.id, cachedChunk);
+		}
 
 		// Make dir for restore cache if not exists
-		const chunkDirectoryExists = await fsExistsAsync(this._options.disk.outputDirectory);
-		if (!chunkDirectoryExists) {
-			await fsMkdirAsync(this._options.disk.outputDirectory);
+		try {
+			await fs.stat(this._options.disk.outputDirectory);
+		} catch (e) {
+			await fs.mkdir(this._options.disk.outputDirectory);
 		}
 
 		const chunkFilename = `${op.chunkRef.id}.txt`;
 		const chunkPathname = path.resolve(this._options.disk.outputDirectory, chunkFilename);
 
-		// Save chunk to file
-		const chunkExists = await fsExistsAsync(chunkPathname);
-		if (!chunkExists) {
+		try {
+			await fs.stat(chunkPathname);
+		} catch (e) {
 			const metadata = {
 				table: op.chunkRef.table,
 				expiresAt: op.chunkRef.expiredAt,
 			};
-			await fsWriteFileAsync(chunkPathname, `${JSON.stringify(metadata)}\n`);
+			await fs.writeFile(chunkPathname, `${JSON.stringify(metadata)}\n`);
 		}
 
 		/**
@@ -89,23 +77,31 @@ export class DiskWatcher extends DataWatcher<ISave, IDiskLoad, IFsWatcherOptions
 			.join('\n')
 			.concat('\n');
 
-		await fsAppendFileAsync(chunkPathname, storeData).then(() => {
-			this._registry.increaseSize(op.chunkRef.id, op.insertRows.length);
-			op.chunkRef.setConsistency(true);
-			delete this._chunks[op.chunkRef.id].operations[operationId];
-		});
+		await fs.appendFile(chunkPathname, storeData);
+
+		this._registry.increaseSize(op.chunkRef.id, op.insertRows.length);
+		op.chunkRef.setConsistency(true);
+
+		if (cachedChunk) {
+			delete cachedChunk.operations[operationId];
+			this._chunks.set(op.chunkRef.id, cachedChunk);
+		}
 	}
 
 	public async load(chunkId: string): Promise<IDiskLoad> {
 		const chunkFilename = `${chunkId}.txt`;
 		const chunkPathname = path.resolve(this._options.disk.outputDirectory, chunkFilename);
 
-		const data = await fsReadFileAsync(chunkPathname, { encoding: 'utf8' });
+		const data = await fs.readFile(chunkPathname, { encoding: 'utf8' });
 
 		const [strMetadata, ...strRows] = data.trim().split('\n');
 
 		const metadata: IChunkMetadata = JSON.parse(strMetadata);
-		const rows: Record<string, unknown>[] = strRows.map((strRow) => JSON.parse(strRow));
+		const rows: Record<string, unknown>[] = [];
+
+		for (const row of strRows) {
+			rows.push(JSON.parse(row));
+		}
 
 		const chunk = new Chunk({
 			dataWatcher: this,
@@ -125,29 +121,28 @@ export class DiskWatcher extends DataWatcher<ISave, IDiskLoad, IFsWatcherOptions
 
 	public backupRuntimeCache(): void {
 		// eslint-disable-next-line guard-for-in,no-restricted-syntax
-		for (const chunkId in this._chunks) {
-			const chunkDirectoryExists = fs.existsSync(this._options.disk.outputDirectory);
+		for (const [chunkId, chunkCache] of this._chunks.entries()) {
+			const chunkDirectoryExists = fsSync.existsSync(this._options.disk.outputDirectory);
 			if (!chunkDirectoryExists) {
-				fs.mkdirSync(this._options.disk.outputDirectory);
+				fsSync.mkdirSync(this._options.disk.outputDirectory);
 			}
 
 			const chunkFilename = `${chunkId}.txt`;
 			const chunkPathname = path.resolve(this._options.disk.outputDirectory, chunkFilename);
+			const chunk = chunkCache.ref;
 
-			const chunk = this._chunks[chunkId].ref;
-
-			const chunkExists = fs.existsSync(chunkPathname);
-			if (!chunkExists) {
+			const chunkExists = fsSync.existsSync(chunkPathname);
+			if (!chunkExists && chunk) {
 				const metadata = {
 					table: chunk.table,
 					expiresAt: chunk.expiredAt,
 				};
-				fs.writeFileSync(chunkPathname, `${JSON.stringify(metadata)}\n`);
+				fsSync.writeFileSync(chunkPathname, `${JSON.stringify(metadata)}\n`);
 			}
 
 			// eslint-disable-next-line guard-for-in,no-restricted-syntax
-			for (const operationId in this._chunks[chunkId].operations) {
-				const runtimeRows = this._chunks[chunkId].operations[operationId];
+			for (const operationId in chunkCache.operations) {
+				const runtimeRows = chunkCache.operations[operationId];
 
 				/**
 				 * Need some kind of schema to optimize
@@ -157,10 +152,11 @@ export class DiskWatcher extends DataWatcher<ISave, IDiskLoad, IFsWatcherOptions
 					.join('\n')
 					.concat('\n');
 
-				fs.appendFileSync(chunkPathname, storeData);
+				fsSync.appendFileSync(chunkPathname, storeData);
 
-				chunk.setConsistency(true);
-				delete this._chunks[chunkId].operations[operationId];
+				chunkCache.ref.setConsistency(true);
+				delete chunkCache.operations[operationId];
+				this._chunks.set(chunkId, chunkCache);
 
 				console.log(
 					`[DiskWatcher] Successfully backed up operation ${operationId} of chunk ${chunkId} with ${runtimeRows.length} rows`,
@@ -170,12 +166,13 @@ export class DiskWatcher extends DataWatcher<ISave, IDiskLoad, IFsWatcherOptions
 	}
 
 	public async restore(): Promise<void> {
-		const chunkDirectoryExists = await fsExistsAsync(this._options.disk.outputDirectory);
-		if (!chunkDirectoryExists) {
+		try {
+			await fs.stat(this._options.disk.outputDirectory);
+		} catch (e) {
 			return;
 		}
 
-		const files = await fsReaddirAsync(this._options.disk.outputDirectory);
+		const files = await fs.readdir(this._options.disk.outputDirectory);
 
 		for (const filename of files) {
 			const isChunkFile = filename.includes('.txt');
@@ -194,8 +191,8 @@ export class DiskWatcher extends DataWatcher<ISave, IDiskLoad, IFsWatcherOptions
 	public async cleanup(chunkId: string): Promise<void> {
 		const chunkFilename = `${chunkId}.txt`;
 		const chunkPathname = path.resolve(this._options.disk.outputDirectory, chunkFilename);
-
-		await fsUnlinkAsync(chunkPathname);
+		this._chunks.delete(chunkId);
+		await fs.unlink(chunkPathname);
 	}
 
 	public countRows(chunkId: string): number {

@@ -3,6 +3,11 @@ import { Row } from '../row/row';
 
 export type TOperationId = string;
 
+export type TChunkCache = {
+	ref: Chunk;
+	operations: Record<TOperationId, Row[]>;
+};
+
 export interface IFsWatcherOptions extends IDataWatcherOptions {
 	disk: {
 		outputDirectory: string;
